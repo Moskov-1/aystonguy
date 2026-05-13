@@ -18,6 +18,8 @@ yarn-error.log
 /auth.json
 /.fleet
 /.idea
+/public/uploads/videos/files/
+/public/uploads/videos/thumbnails/
 /.nova
 /.vscode
 /.zed
