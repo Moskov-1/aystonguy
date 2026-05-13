@@ -9,6 +9,7 @@ use App\Http\Controllers\Backend\RolePermissionController;
 use App\Http\Controllers\Backend\SettingsController;
 use App\Http\Controllers\Backend\UserController;
 use App\Http\Controllers\Backend\VideoController;
+use App\Http\Controllers\Backend\ChatController;
 
 
 Route::controller(AdminController::class)->group(function(){
@@ -77,5 +78,12 @@ Route::middleware('auth')->group(function () {
         Route::get('/{video}/edit-page', [VideoController::class, 'editPage'])->name('edit-page');
         Route::post('/{video}', [VideoController::class, 'update'])->name('update');
         Route::delete('/{video}', [VideoController::class, 'destroy'])->name('destroy');
+    });
+
+    Route::prefix('admin/chats')->name('admin.chats.')->group(function () {
+        Route::get('/', [ChatController::class, 'index'])->name('index');
+        Route::get('/conversation', [ChatController::class, 'conversation'])->name('conversation');
+        Route::post('/send', [ChatController::class, 'sendMessage'])->name('send');
+        Route::post('/transcribe', [ChatController::class, 'transcribe'])->name('transcribe');
     });
 });

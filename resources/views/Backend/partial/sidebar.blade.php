@@ -108,6 +108,14 @@
       </a>
     </li>
 
+    {{-- chat --}}
+    <li class="menu-item {{ request()->routeIs('admin.chats.*') ? 'active' : '' }}">
+      <a href="{{ route('admin.chats.index') }}" class="menu-link">
+        <i class="menu-icon bi bi-chat-dots"></i>
+        <div class="text-truncate">Chat</div>
+      </a>
+    </li>
+
 
 
 

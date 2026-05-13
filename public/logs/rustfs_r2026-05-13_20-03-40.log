@@ -1,0 +1,4 @@
+[2026-05-14 02:03:40.153140 +06:00] ERROR [rustfs_ecstore::disk::local] [crates\ecstore\src\disk\local.rs:276] [rustfs-worker:ThreadId(10)] cleanup_deleted_objects error: Io(Os { code: 5, kind: PermissionDenied, message: "Access is denied." })
+
+[2026-05-14 02:08:40.154557 +06:00] ERROR [rustfs_ecstore::disk::local] [crates\ecstore\src\disk\local.rs:276] [rustfs-worker:ThreadId(5)] cleanup_deleted_objects error: Io(Os { code: 5, kind: PermissionDenied, message: "Access is denied." })
+
