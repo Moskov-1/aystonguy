@@ -196,9 +196,13 @@
                             $('#msg-input').val(res.text);
                             $('#transcription-status').text('Voice Ready');
                             $('.spinner-border').hide();
+                        } else {
+                             $('#transcription-status').text('Transcription Empty');
+                             $('.spinner-border').hide();
                         }
                     },
-                    error: function() {
+                    error: function(xhr) {
+                        console.error('Transcription Error:', xhr.responseText);
                         $('#transcription-status').text('Transcription Failed');
                         $('.spinner-border').hide();
                     }
@@ -242,11 +246,11 @@
                         };
 
                         mediaRecorder.onstop = () => {
-                            // Specify a higher bitrate and ensure we use a standard audio format
-                            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                            // Use audio/webm as it's more standard for MediaRecorder in most browsers
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                             const audioUrl = URL.createObjectURL(audioBlob);
                             
-                            const file = new File([audioBlob], "recording.wav", { type: "audio/wav" });
+                            const file = new File([audioBlob], "recording.webm", { type: "audio/webm" });
                             const dataTransfer = new DataTransfer();
                             dataTransfer.items.add(file);
                             document.getElementById('audio-input').files = dataTransfer.files;

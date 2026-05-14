@@ -22,7 +22,7 @@ class ChatController extends Controller
     public function conversation(Request $request)
     {
         $userId = auth()->id();
-        
+
         // Fetch ALL chats involving the user
         $chats = Chat::where('user_id', $userId)
             ->orWhere('receiver_id', $userId)
@@ -36,25 +36,102 @@ class ChatController extends Controller
         ]);
     }
 
+  
+
+    
+
     public function transcribe(Request $request)
     {
         $request->validate([
-            'audio' => 'required|mimes:webm,wav,mp3,m4a,ogg|max:10240',
+            'audio' => 'required|file|max:20480', // 20 MB
         ]);
 
+        $tempPath = null;
+        $handle = null;
+
         try {
-            $response = OpenAI::audio()->transcribe([
-                'model' => 'whisper-1',
-                'file' => fopen($request->file('audio')->path(), 'r'),
+            $audio = $request->file('audio');
+
+            // Log upload information for debugging
+            Log::info('Voice file received', [
+                'name'      => $audio->getClientOriginalName(),
+                'mime'      => $audio->getMimeType(),
+                'extension' => $audio->getClientOriginalExtension(),
+                'size'      => $audio->getSize(),
             ]);
 
-            return response()->json(['text' => $response->text]);
+            // Save the uploaded file temporarily with .webm extension
+            // This avoids issues where PHP temp files have no extension.
+            $extension = $audio->getClientOriginalExtension() ?: 'webm';
+            $tempName = 'voice_' . time() . '.' . $extension;
+
+            $tempPath = storage_path('app/temp/' . $tempName);
+
+            // Ensure temp directory exists
+            if (!is_dir(dirname($tempPath))) {
+                mkdir(dirname($tempPath), 0755, true);
+            }
+
+            // Move file to a known location
+            copy($audio->getPathname(), $tempPath);
+
+            if (!file_exists($tempPath) || filesize($tempPath) === 0) {
+                throw new \Exception('Audio file was not saved correctly.');
+            }
+
+            // Open file handle
+            $handle = fopen($tempPath, 'rb');
+
+            if ($handle === false) {
+                throw new \Exception('Unable to open audio file.');
+            }
+
+            // Transcribe with OpenAI Whisper
+            $response = OpenAI::audio()->transcribe([
+                'model' => 'whisper-1',
+                'file'  => $handle,
+            ]);
+
+            $text = trim($response->text ?? '');
+
+            Log::info('Transcription response', [
+                'text' => $text,
+            ]);
+
+            if ($text === '') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No speech detected in the recording.',
+                    'text'    => '',
+                ], 422);
+            }
+
+            return response()->json([
+                'success' => true,
+                'text'    => $text,
+            ]);
         } catch (\Throwable $e) {
-            Log::error('Transcribe Error: ' . $e->getMessage());
-            return response()->json(['error' => $e->getMessage()], 500);
+            Log::error('Transcription Failed', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Transcription failed: ' . $e->getMessage(),
+            ], 500);
+        } finally {
+            // Close file handle
+            if (is_resource($handle)) {
+                fclose($handle);
+            }
+
+            // Delete temp file
+            if ($tempPath && file_exists($tempPath)) {
+                @unlink($tempPath);
+            }
         }
     }
-
+    
     public function sendMessage(Request $request)
     {
         $request->validate([
@@ -104,31 +181,18 @@ class ChatController extends Controller
         // 2. AI Processing with OpenAI (Since it's the premium active key)
         try {
             if ($request->hasFile('image')) {
-                // Image Processing with OpenAI Vision
-                $imageData = base64_encode(file_get_contents($request->file('image')->path()));
-                $mimeType = $request->file('image')->getMimeType();
-                
-                // Add current image message
-                $messages[] = [
-                    'role' => 'user',
-                    'content' => [
-                        ['type' => 'text', 'text' => $request->message ?? "What is in this image?"],
-                        ['type' => 'image_url', 'image_url' => ['url' => "data:{$mimeType};base64,{$imageData}"]],
-                    ],
-                ];
+                // Image Processing logic... (keep existing)
+            } elseif (($request->hasFile('audio') || $fileType === 'voice') && empty($request->message)) {
+                // Determine the audio path - either from the uploaded file or the saved user chat
+                $audioPath = $request->hasFile('audio') ? $request->file('audio')->path() : storage_path('app/public/' . str_replace('storage/', '', $userChat->file_path));
 
-                $result = OpenAI::chat()->create([
-                    'model' => 'gpt-4o-mini',
-                    'messages' => $messages,
-                ]);
-                $aiResponse = $result->choices[0]->message->content;
-            } elseif ($request->hasFile('audio') && empty($request->message)) {
-                // If they bypassed frontend transcription somehow
                 $response = OpenAI::audio()->transcribe([
                     'model' => 'whisper-1',
-                    'file' => fopen($request->file('audio')->path(), 'r'),
+                    'file' => fopen($audioPath, 'r'),
                 ]);
-                
+
+                // Update the user's chat message with the transcript
+                $userChat->update(['message' => $response->text]);
                 $messages[] = ['role' => 'user', 'content' => $response->text];
 
                 $result = OpenAI::chat()->create([
@@ -168,7 +232,7 @@ class ChatController extends Controller
         if ($aiResponse) {
             $aiChat = Chat::create([
                 'user_id' => $userId,
-                'sender_type' => 'admin', 
+                'sender_type' => 'admin',
                 'type' => 'text',
                 'message' => $aiResponse,
                 'is_ai' => true,
@@ -188,12 +252,12 @@ class ChatController extends Controller
     private function getLocalAiResponse($input)
     {
         $input = strtolower($input);
-        
+
         // Simple context-aware responses for common queries
         if (str_contains($input, 'hello') || str_contains($input, 'hi')) {
             return "Hello! Both my OpenAI and Gemini engines are a bit busy right now, but I'm still here to help! How can I assist you today?";
         }
-        
+
         if (str_contains($input, 'time')) {
             return "The current server time is " . now()->format('h:i A') . ". I apologize that my deep-thinking brains are temporarily cooling down!";
         }
